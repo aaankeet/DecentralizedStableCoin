@@ -1,0 +1,245 @@
+// SPDX-License-Identifier: SEE LICENSE IN LICENSE
+pragma solidity ^0.8.18;
+
+import {Test} from "forge-std/Test.sol";
+import {console} from "forge-std/console.sol";
+import {DeployDsc} from "../../script/DeployDsc.s.sol";
+import {DSCEngine} from "../../src/DSCEngine.sol";
+import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
+import {HelperConfig} from "../../script/HelperConfig.s.sol";
+
+import {ERC20Mock} from "@oz/mocks/ERC20Mock.sol";
+
+error DSCEngine_InvalidTokenAddress();
+error DSCEngine_InvalidAddress();
+error DSCEngine_TokenNotAllowed();
+error DSCEngine_AmountMustBeAboveZero();
+error DSCEngine_TokenAndPriceFeedAddressMisMatch();
+error DSCEngine_TransferFailed();
+error DSCEngine_CriticalHealthFactor(uint256 healthFactor);
+error DSCEngine_HealthFactorOk();
+
+contract DSCEngineTest is Test {
+    DeployDsc deployer;
+    DecentralizedStableCoin dsc;
+    DSCEngine dscEngine;
+    HelperConfig config;
+
+    address public wEth;
+    address public wBtc;
+
+    address public ethPriceFeed;
+    address public btcPriceFeed;
+
+    address public ALICE = makeAddr("Alice");
+    address public fakeToken = makeAddr("FakeToken");
+
+    uint256 public ONE_ETH_PRICE = 2000;
+    uint256 public ONE_BTC_PRICE = 1000;
+
+    uint256 public DSC_AMOUNT_TO_MINT = 10000 ether; // equivalent to $10,000
+    uint256 public DSC_AMOUNT_TO_BURN = 5000 ether; // equivalent to $5,000
+
+    uint256 public APPROVAL_AMOUNT = 20000 ether;
+    uint256 public COLLATERAL_AMOUNT = 10 ether; // equivalent to $20,000 DSC
+
+    event DscMinted(address user, uint256 amount);
+
+    function setUp() public {
+        deployer = new DeployDsc();
+        (dsc, dscEngine, config) = deployer.run();
+        (ethPriceFeed, btcPriceFeed, wEth, wBtc,) = config.activeNetworkConfig();
+
+        ERC20Mock(wEth).mint(ALICE, APPROVAL_AMOUNT);
+    }
+
+    address[] public tokenAddresses = [wEth, wBtc];
+    address[] public priceFeedAddresses = [ethPriceFeed, btcPriceFeed];
+
+    modifier depositCollateral() {
+        vm.startPrank(ALICE);
+        ERC20Mock(wEth).approve(address(dscEngine), APPROVAL_AMOUNT);
+
+        dscEngine.depositCollateral(wEth, COLLATERAL_AMOUNT);
+
+        vm.stopPrank();
+        _;
+    }
+
+    modifier dscApproval() {
+        vm.startPrank(ALICE);
+        dsc.approve(address(dscEngine), DSC_AMOUNT_TO_MINT);
+        _;
+    }
+
+    /////////////////////////////////////////////////////
+    ///              CONSTRUCTOR TESTS                ///
+    /////////////////////////////////////////////////////
+
+    function testRevertIfTokenAddressesAndPriceFeedAddressesMismatch() public {
+        // Add fake Token to check for revert
+        tokenAddresses.push(fakeToken);
+        vm.expectRevert(DSCEngine_TokenAndPriceFeedAddressMisMatch.selector);
+        new DSCEngine(tokenAddresses, priceFeedAddresses, address(dsc));
+    }
+
+    function testRevertDscEngineAddressZero() public {
+        vm.expectRevert(DSCEngine_InvalidAddress.selector);
+        new DSCEngine(tokenAddresses, priceFeedAddresses, address(0));
+    }
+
+    /////////////////////////////////////////////////////
+    ///                 PRICE FEED TEST               ///
+    /////////////////////////////////////////////////////
+
+    function testGetValueInUSD() public {
+        uint256 ethAmount = 15 ether;
+        uint256 expectedValueInUSDFromEther = ethAmount * ONE_ETH_PRICE;
+
+        uint256 valueInUsdFromEth = dscEngine.getValueInUSD(wEth, ethAmount);
+
+        assertEq(valueInUsdFromEth, expectedValueInUSDFromEther);
+
+        uint256 btcAmount = 15 ether;
+        uint256 valueInUSDFromBTC = btcAmount * ONE_BTC_PRICE;
+
+        uint256 valueInBtc = dscEngine.getValueInUSD(wBtc, 15 ether);
+        assertEq(valueInUSDFromBTC, valueInBtc);
+    }
+
+    function testGetTokenAmountFromUSD() public {
+        uint256 amountInUsd = 10 ether;
+        uint256 expectedAmount = dscEngine.getTokenAmountFromUSD(wEth, amountInUsd);
+        // $2000 / Eth
+        assertEq(expectedAmount, amountInUsd / ONE_ETH_PRICE);
+    }
+
+    /////////////////////////////////////////////////////
+    ///            DEPOSIT COLLATERAL TESTS           ///
+    /////////////////////////////////////////////////////
+
+    function testRevertDepositCollateralIfTokenNotAllowed() public {
+        vm.expectRevert(DSCEngine_TokenNotAllowed.selector);
+        dscEngine.depositCollateral(fakeToken, COLLATERAL_AMOUNT);
+    }
+
+    function testRevertDepositCollateralIfAmountIsZero() public {
+        vm.expectRevert(DSCEngine_AmountMustBeAboveZero.selector);
+        dscEngine.depositCollateral(wEth, 0);
+    }
+
+    function testDepositCollateral() public {
+        vm.startPrank(ALICE);
+
+        ERC20Mock(wEth).approve(address(dscEngine), APPROVAL_AMOUNT);
+
+        dscEngine.depositCollateral(wEth, COLLATERAL_AMOUNT);
+
+        uint256 aliceDepositedCollateral = dscEngine.getUserDepositedCollateral(ALICE, wEth);
+
+        console.log(aliceDepositedCollateral);
+
+        assertEq(aliceDepositedCollateral, COLLATERAL_AMOUNT);
+
+        assertEq(ERC20Mock(wEth).balanceOf(address(dscEngine)), COLLATERAL_AMOUNT);
+        assertEq(ERC20Mock(wEth).balanceOf(ALICE), APPROVAL_AMOUNT - COLLATERAL_AMOUNT);
+        vm.stopPrank();
+    }
+
+    /////////////////////////////////////////////////////
+    ///                 MINT & BURN TEST              ///
+    /////////////////////////////////////////////////////
+
+    function testRevertIfHealthFactorGetsBroken() public depositCollateral {
+        // Deposited 10 Eth
+        // 1 Eth -> $2000
+        // $2000 * 10 => $20,000
+        // should not be able to mint DSC worth more than $10,000
+        vm.prank(ALICE);
+
+        vm.expectRevert(abi.encodeWithSelector(DSCEngine_CriticalHealthFactor.selector, 0));
+        dscEngine.mintDsc(10001 ether);
+    }
+
+    function testMintDsc() public depositCollateral {
+        vm.prank(ALICE);
+
+        vm.expectEmit(true, true, false, true, address(dscEngine));
+
+        emit DscMinted(ALICE, DSC_AMOUNT_TO_MINT);
+
+        dscEngine.mintDsc(DSC_AMOUNT_TO_MINT);
+
+        assertEq(dscEngine.getUserDscMinted(ALICE), DSC_AMOUNT_TO_MINT); // 10000 ether
+    }
+
+    function testBurnDSC() public depositCollateral dscApproval {
+        testMintDsc();
+
+        vm.prank(ALICE);
+
+        bool result = dscEngine.burnDsc(DSC_AMOUNT_TO_BURN); // 5000 ether
+
+        uint256 amountAfterBurn = dscEngine.getUserDscMinted(ALICE);
+
+        assertEq(amountAfterBurn, DSC_AMOUNT_TO_MINT - DSC_AMOUNT_TO_BURN);
+        assertEq(result, true);
+    }
+
+    function testRedeemCollateralForDsc() public dscApproval {
+        uint256 redeemAmount = 5 ether;
+
+        testMintDsc();
+
+        console.log("wEth Deposited By Alice ", dscEngine.getUserDepositedCollateral(ALICE, wEth));
+        console.log("Dsc Minted By Alice", dscEngine.getUserDscMinted(ALICE));
+        console.log("Alice Health Factor:", dscEngine.getHealthFactor(ALICE));
+
+        vm.prank(ALICE);
+
+        dscEngine.redeemCollateralForDsc(wEth, redeemAmount, 10000 ether);
+
+        console.log("After Redeeming Collateral for DSC");
+
+        console.log("wEth Deposited By Alice ", dscEngine.getUserDepositedCollateral(ALICE, wEth));
+        console.log("Dsc Minted By Alice", dscEngine.getUserDscMinted(ALICE));
+
+        console.log("Alice Health Factor:", dscEngine.getHealthFactor(ALICE));
+
+        assertEq(ERC20Mock(wEth).balanceOf(ALICE), (APPROVAL_AMOUNT - COLLATERAL_AMOUNT) + redeemAmount);
+        assertEq(dscEngine.getUserDepositedCollateral(ALICE, wEth), redeemAmount);
+        assertEq(dscEngine.getUserDscMinted(ALICE), 0);
+    }
+
+    function testGetUserCollateralValue() public depositCollateral {
+        uint256 totalCollateralValue = dscEngine.getUserCollateralValue(ALICE);
+
+        uint256 expectedTotalCollateralValue = COLLATERAL_AMOUNT * ONE_ETH_PRICE;
+        assertEq(totalCollateralValue, expectedTotalCollateralValue);
+    }
+
+    ////////////////////////////////////////////////////////////////////
+    ///                        LIQUIDATE TEST                        ///
+    ////////////////////////////////////////////////////////////////////
+
+    function testRevertLiquidateIfHealthFactorIsOK() public {
+        address liquidator = makeAddr("Liquidator");
+
+        testMintDsc();
+
+        vm.prank(liquidator);
+
+        vm.expectRevert(DSCEngine_HealthFactorOk.selector);
+
+        dscEngine.liquidate(ALICE, wEth, 5 ether);
+    }
+
+    function testLiquidate() public {
+        address liquidator = makeAddr("Liquidator");
+
+        testMintDsc();
+        vm.prank(ALICE);
+
+        // vm.prank(liquidator);
+    }
+}
