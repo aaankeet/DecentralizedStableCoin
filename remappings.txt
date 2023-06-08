@@ -1,0 +1,3 @@
+@chainlink/contracts=lib/chainlink-brownie-contracts/contracts
+
+@oz=lib/openzeppelin-contracts/contracts
