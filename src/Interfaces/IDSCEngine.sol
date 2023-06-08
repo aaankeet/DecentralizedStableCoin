@@ -19,8 +19,7 @@ interface IDSCEngine {
     event DscMinted(address user, uint256 amount);
 
     function depositCollateralAndMintDsc(address tokenAddress, uint256 collateralAmount, uint256 amountDscToMint)
-        external
-        returns (bool);
+        external;
 
     function depositCollateral(address tokenAddress, uint256 amount) external returns (bool);
 

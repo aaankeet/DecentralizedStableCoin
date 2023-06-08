@@ -114,12 +114,9 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
 
     function depositCollateralAndMintDsc(address tokenAddress, uint256 collateralAmount, uint256 amountDscToMint)
         external
-        returns (bool success)
     {
         depositCollateral(tokenAddress, collateralAmount);
         mintDsc(amountDscToMint);
-
-        return success;
     }
 
     function redeemCollateral(address collateralTokenAddress, uint256 collateralAmount)
@@ -347,15 +344,15 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
 
     function _healthFactor(address user) private view returns (uint256 healthFactor) {
         (uint256 totalDscMinted, uint256 totalCollateralValueInUsd) = getAccountInfo(user);
-        uint256 collateralRatio = ((totalCollateralValueInUsd / 1e18) * LIQUIDATION_THRESHOLD) / LIQUIDATION_PRECISION;
-
-        // cannot be divide by 0
 
         if (totalDscMinted == 0) {
             return type(uint256).max;
         }
 
-        return healthFactor = (collateralRatio * PRECISION) / totalDscMinted;
+        uint256 collateralAdjustedForThreshold =
+            ((totalCollateralValueInUsd * LIQUIDATION_THRESHOLD) / PRECISION) / LIQUIDATION_PRECISION;
+
+        return healthFactor = (collateralAdjustedForThreshold * PRECISION) / totalDscMinted;
     }
 
     function _revertIfHealthFactorIsBroken(address user) private view {

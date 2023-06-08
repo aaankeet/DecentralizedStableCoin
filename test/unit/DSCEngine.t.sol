@@ -40,7 +40,7 @@ contract DSCEngineTest is Test {
     uint256 public DSC_AMOUNT_TO_MINT = 10000 ether; // equivalent to $10,000
     uint256 public DSC_AMOUNT_TO_BURN = 5000 ether; // equivalent to $5,000
 
-    uint256 public APPROVAL_AMOUNT = 20000 ether;
+    uint256 public APPROVAL_AMOUNT = 200 ether;
     uint256 public COLLATERAL_AMOUNT = 10 ether; // equivalent to $20,000 DSC
 
     event DscMinted(address user, uint256 amount);
@@ -146,8 +146,20 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
     }
 
+    function testDepositCollaterlAndMintDSC() public {
+        vm.startPrank(ALICE);
+
+        ERC20Mock(wEth).approve(address(dscEngine), APPROVAL_AMOUNT);
+        dscEngine.depositCollateralAndMintDsc(wEth, COLLATERAL_AMOUNT, DSC_AMOUNT_TO_MINT);
+
+        assertEq(dscEngine.getUserDepositedCollateral(ALICE, wEth), COLLATERAL_AMOUNT);
+        assertEq(dscEngine.getUserDscMinted(ALICE), DSC_AMOUNT_TO_MINT);
+
+        vm.stopPrank();
+    }
+
     /////////////////////////////////////////////////////
-    ///                 MINT & BURN TEST              ///
+    ///                MINT & BURN TESTS              ///
     /////////////////////////////////////////////////////
 
     function testRevertIfHealthFactorGetsBroken() public depositCollateral {
@@ -173,8 +185,8 @@ contract DSCEngineTest is Test {
         assertEq(dscEngine.getUserDscMinted(ALICE), DSC_AMOUNT_TO_MINT); // 10000 ether
     }
 
-    function testBurnDSC() public depositCollateral dscApproval {
-        testMintDsc();
+    function testBurnDSC() public dscApproval {
+        testDepositCollaterlAndMintDSC();
 
         vm.prank(ALICE);
 
@@ -189,10 +201,10 @@ contract DSCEngineTest is Test {
     function testRedeemCollateralForDsc() public dscApproval {
         uint256 redeemAmount = 5 ether;
 
-        testMintDsc();
+        testDepositCollaterlAndMintDSC();
 
-        console.log("wEth Deposited By Alice ", dscEngine.getUserDepositedCollateral(ALICE, wEth));
-        console.log("Dsc Minted By Alice", dscEngine.getUserDscMinted(ALICE));
+        console.log("wEth Deposited By Alice: ", dscEngine.getUserDepositedCollateral(ALICE, wEth));
+        console.log("Dsc Minted By Alice:", dscEngine.getUserDscMinted(ALICE));
         console.log("Alice Health Factor:", dscEngine.getHealthFactor(ALICE));
 
         vm.prank(ALICE);
@@ -201,8 +213,8 @@ contract DSCEngineTest is Test {
 
         console.log("After Redeeming Collateral for DSC");
 
-        console.log("wEth Deposited By Alice ", dscEngine.getUserDepositedCollateral(ALICE, wEth));
-        console.log("Dsc Minted By Alice", dscEngine.getUserDscMinted(ALICE));
+        console.log("wEth Deposited By Alice:", dscEngine.getUserDepositedCollateral(ALICE, wEth));
+        console.log("Dsc Minted By Alice:", dscEngine.getUserDscMinted(ALICE));
 
         console.log("Alice Health Factor:", dscEngine.getHealthFactor(ALICE));
 
@@ -225,7 +237,7 @@ contract DSCEngineTest is Test {
     function testRevertLiquidateIfHealthFactorIsOK() public {
         address liquidator = makeAddr("Liquidator");
 
-        testMintDsc();
+        testDepositCollaterlAndMintDSC();
 
         vm.prank(liquidator);
 
@@ -241,5 +253,35 @@ contract DSCEngineTest is Test {
         vm.prank(ALICE);
 
         // vm.prank(liquidator);
+    }
+
+    ////////////////////////////////////////
+    ///         HEALTH FACTOR TEST       ///
+    ////////////////////////////////////////
+
+    function testHealthFactor() public {
+        testDepositCollaterlAndMintDSC();
+
+        uint256 expectedHealthFactor = 1;
+
+        // we deposited $20,000 worth of eth
+        // and minted $10,000 worth of DSC
+        // with 50% liquidation threshold
+        // So, we must always have $20,000 as collateral all the time
+        // to maintain our position
+
+        /**
+         * Collatarerl Amount * Liquidation Threshold
+         * 20,000 * 0.5 = 10,000 -> Liquidation threshold value
+         * Liquidation Threshold value / Borrowed Amount
+         * 10,000 / 10000 = 1;
+         *
+         * with a borrowed amount of $10,000 and a collateral of $20,000 at a 50% liquidation threshold,
+         * the health factor is 1.
+         * This means that the collateral is equal to the liquidation threshold,
+         * indicating a precarious situation where any decrease in collateral value
+         * would result in liquidation.
+         */
+        assertEq(dscEngine.getHealthFactor(ALICE), expectedHealthFactor);
     }
 }
