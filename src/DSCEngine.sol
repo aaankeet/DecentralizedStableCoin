@@ -44,10 +44,14 @@ import {ReentrancyGuard} from "@oz/security/ReentrancyGuard.sol";
 import {AggregatorV3Interface} from "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import {IERC20} from "@oz/token/ERC20/IERC20.sol";
 
+import {IDecentralizedStableCoin} from "./Interfaces/IDecentralizedStableCoin.sol";
+import {OracleLib} from "./libraries/OracleLib.sol";
+
 import "./Interfaces/IDSCEngine.sol";
-import "./Interfaces/IDecentralizedStableCoin.sol";
 
 contract DSCEngine is IDSCEngine, ReentrancyGuard {
+    using OracleLib for AggregatorV3Interface;
+
     ///////////////////////
     /// STATE VARIABLES ///
     ///////////////////////
@@ -59,10 +63,10 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
 
     mapping(address user => uint256 amount) private userDscMinted;
 
-    uint8 public constant MIN_HEALTH_FACTOR = 1;
-    uint8 public constant LIQUIDATION_THRESHOLD = 50; // 200%
-    uint8 public constant LIQUIDATION_PRECISION = 100;
-    uint8 public constant LIQUIDATOR_BONUS = 10; //this means 10% bonus
+    uint256 public constant MIN_HEALTH_FACTOR = 1;
+    uint256 public constant LIQUIDATION_THRESHOLD = 50; // 200%
+    uint256 public constant LIQUIDATION_PRECISION = 100;
+    uint256 public constant LIQUIDATOR_BONUS = 10; //this means 10% bonus
 
     uint256 public constant FEED_PRECISION = 1e10;
     uint256 public constant PRECISION = 1e18;
@@ -292,13 +296,13 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
         // $/ETH Eth??
         // $2000 / Eth. $1000 = 0.5 eth
         AggregatorV3Interface priceFeed = AggregatorV3Interface(tokenToPriceFeeds[token]);
-        (, int256 price,,,) = priceFeed.latestRoundData();
+        (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
         return (usdAmountInWei * PRECISION) / (uint256(price) * FEED_PRECISION);
     }
 
     function getValueInUSD(address token, uint256 amount) public view returns (uint256) {
         AggregatorV3Interface priceFeed = AggregatorV3Interface(tokenToPriceFeeds[token]);
-        (, int256 price,,,) = priceFeed.latestRoundData();
+        (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
         return ((uint256(price) * FEED_PRECISION) * amount) / PRECISION;
     }
 
@@ -383,5 +387,14 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
 
     function getHealthFactor(address user) external view returns (uint256) {
         return _healthFactor(user);
+    }
+
+    function getCollateralTokens() external view returns (address[] memory) {
+        return collateralTokens;
+    }
+
+    function getTokenToPriceFeedAddress(address tokenAddress) external view returns (address) {
+        if (tokenToPriceFeeds[tokenAddress] == address(0)) revert DSCEngine_InvalidAddress();
+        return tokenToPriceFeeds[tokenAddress];
     }
 }
