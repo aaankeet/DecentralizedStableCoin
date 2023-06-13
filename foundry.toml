@@ -3,6 +3,8 @@ src = "src"
 out = "out"
 libs = ["lib"]
 
+gas_report=["DSCEngine", "DecentralizedStableCoin"]
+
 
 [invariant]
 runs = 128

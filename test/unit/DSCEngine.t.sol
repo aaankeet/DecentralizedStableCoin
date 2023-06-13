@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity ^0.8.18;
+pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
 import {console} from "forge-std/console.sol";
@@ -246,14 +246,14 @@ contract DSCEngineTest is Test {
         dscEngine.liquidate(ALICE, wEth, 5 ether);
     }
 
-    function testLiquidate() public {
-        address liquidator = makeAddr("Liquidator");
+    // function testLiquidate() public {
+    //     address liquidator = makeAddr("Liquidator");
 
-        testMintDsc();
-        vm.prank(ALICE);
+    //     testMintDsc();
+    //     vm.prank(ALICE);
 
-        // vm.prank(liquidator);
-    }
+    //     // vm.prank(liquidator);
+    // }
 
     ////////////////////////////////////////
     ///         HEALTH FACTOR TEST       ///

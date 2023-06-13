@@ -5,7 +5,7 @@
 // 1. the total supply of DSC should always be less than total collaretal amount
 // 2. Getter view functions should never revert <- Evergreen Invriant
 
-pragma solidity 0.8.18;
+pragma solidity 0.8.19;
 
 import {Test, console} from "forge-std/Test.sol";
 import {StdInvariant} from "forge-std/StdInvariant.sol";

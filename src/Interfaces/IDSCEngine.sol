@@ -1,17 +1,17 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
-pragma solidity ^0.8.18;
-
-error DSCEngine_InvalidTokenAddress();
-error DSCEngine_InvalidAddress();
-error DSCEngine_TokenNotAllowed();
-error DSCEngine_AmountMustBeAboveZero();
-error DSCEngine_TokenAndPriceFeedAddressMisMatch();
-error DSCEngine_TransferFailed();
-error DSCEngine_CriticalHealthFactor(uint256 healthFactor);
-error DSCEngine_HealthFactorOk();
-error DSCEngine_UserHealthFactorNotImproved();
+pragma solidity 0.8.19;
 
 interface IDSCEngine {
+    error DSCEngine_InvalidTokenAddress();
+    error DSCEngine_InvalidAddress();
+    error DSCEngine_TokenNotAllowed();
+    error DSCEngine_AmountMustBeAboveZero();
+    error DSCEngine_TokenAndPriceFeedAddressMisMatch();
+    error DSCEngine_TransferFailed();
+    error DSCEngine_CriticalHealthFactor(uint256 healthFactor);
+    error DSCEngine_HealthFactorOk();
+    error DSCEngine_UserHealthFactorNotImproved();
+
     event CollateralDeposited(address indexed user, address indexed tokenAddress, uint256 indexed amount);
 
     event CollateralRedeemed(address indexed from, address indexed to, address indexed tokenAddress, uint256 amount);
