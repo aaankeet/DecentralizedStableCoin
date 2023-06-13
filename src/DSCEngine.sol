@@ -1,27 +1,5 @@
-// Layout of Contract:
-// version
-// imports
-// errors
-// interfaces, libraries, contracts
-// Type declarations
-// State variables
-// Events
-// Modifiers
-// Functions
-
-// Layout of Functions:
-// constructor
-// receive function (if exists)
-// fallback function (if exists)
-// external
-// public
-// internal
-// private
-// internal & private view & pure functions
-// external & public view & pure functions
-
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.18;
+pragma solidity 0.8.19;
 
 /**
  * @title DSCEngine
@@ -55,7 +33,7 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
     ///////////////////////
     /// STATE VARIABLES ///
     ///////////////////////
-    IDecentralizedStableCoin public dsc;
+    IDecentralizedStableCoin public immutable dsc;
 
     mapping(address token => address priceFeeds) public tokenToPriceFeeds;
 
@@ -253,6 +231,7 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
         if (!minted) revert DSCEngine_TransferFailed();
 
         emit DscMinted(msg.sender, amountToMint);
+
         return minted;
     }
 
@@ -292,9 +271,10 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
      */
 
     function getTokenAmountFromUSD(address token, uint256 usdAmountInWei) public view returns (uint256) {
-        // price of ETH (token)
-        // $/ETH Eth??
-        // $2000 / Eth. $1000 = 0.5 eth
+        // $100e18 USD Debt
+        // 1 ETH = 2000 USD
+        // The returned value from Chainlink will be 2000 * 1e8
+        // Most USD pairs have 8 decimals, so we will just pretend they all do
         AggregatorV3Interface priceFeed = AggregatorV3Interface(tokenToPriceFeeds[token]);
         (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
         return (usdAmountInWei * PRECISION) / (uint256(price) * FEED_PRECISION);
