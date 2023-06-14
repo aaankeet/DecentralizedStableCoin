@@ -8,7 +8,9 @@ import {DSCEngine} from "../../src/DSCEngine.sol";
 import {DecentralizedStableCoin} from "../../src/DecentralizedStableCoin.sol";
 import {HelperConfig} from "../../script/HelperConfig.s.sol";
 
+import {MockV3Aggregator} from "../Mocks/MockV3Aggregator.sol";
 import {ERC20Mock} from "@oz/mocks/ERC20Mock.sol";
+import {MockDSC} from "../Mocks/MockDebtDsc.sol";
 
 error DSCEngine_InvalidTokenAddress();
 error DSCEngine_InvalidAddress();
@@ -18,6 +20,7 @@ error DSCEngine_TokenAndPriceFeedAddressMisMatch();
 error DSCEngine_TransferFailed();
 error DSCEngine_CriticalHealthFactor(uint256 healthFactor);
 error DSCEngine_HealthFactorOk();
+error DSCEngine_UserHealthFactorNotImproved();
 
 contract DSCEngineTest is Test {
     DeployDsc deployer;
@@ -231,7 +234,7 @@ contract DSCEngineTest is Test {
     }
 
     ////////////////////////////////////////////////////////////////////
-    ///                        LIQUIDATE TEST                        ///
+    ///                        LIQUIDATE TESTS                       ///
     ////////////////////////////////////////////////////////////////////
 
     function testRevertLiquidateIfHealthFactorIsOK() public {
@@ -246,14 +249,47 @@ contract DSCEngineTest is Test {
         dscEngine.liquidate(ALICE, wEth, 5 ether);
     }
 
-    // function testLiquidate() public {
-    //     address liquidator = makeAddr("Liquidator");
+    address[] tokens;
+    address[] priceFeeds;
 
-    //     testMintDsc();
-    //     vm.prank(ALICE);
+    function test_Must_Improve_Health_Factor_On_Liquidation() public {
+        MockDSC mdsc = new MockDSC(ethPriceFeed);
 
-    //     // vm.prank(liquidator);
-    // }
+        tokens = [wEth];
+        priceFeeds = [ethPriceFeed];
+
+        address owner = msg.sender;
+
+        vm.prank(owner);
+        DSCEngine mockDsce = new DSCEngine(tokens, priceFeeds, address(mdsc));
+        mdsc.transferOwnership(address(mockDsce));
+
+        // User Setup
+        vm.startPrank(ALICE);
+        ERC20Mock(wEth).approve(address(mockDsce), COLLATERAL_AMOUNT);
+        mockDsce.depositCollateralAndMintDsc(wEth, COLLATERAL_AMOUNT, 100 ether);
+        vm.stopPrank();
+
+        // Arrange Liquidator
+        uint256 collateraToCover = 1 ether; // 1 Ether = $2000
+        address LIQUIDATOR = makeAddr("Liquidator");
+        ERC20Mock(wEth).mint(LIQUIDATOR, collateraToCover);
+
+        vm.startPrank(LIQUIDATOR);
+        ERC20Mock(wEth).approve(address(mockDsce), collateraToCover);
+        uint256 debtToCover = 10 ether; // 10 DSC Tokens  = $10
+        // Deposit 1 ether = $2000 and mint 100 Dsc = 100$
+        mockDsce.depositCollateralAndMintDsc(wEth, collateraToCover, 100 ether);
+        mdsc.approve(address(mockDsce), debtToCover);
+
+        // Act
+        int256 ethUsdNewPrice = 18e8; // 1 Eth = $18
+        MockV3Aggregator(ethPriceFeed).updateAnswer(ethUsdNewPrice);
+
+        vm.expectRevert(DSCEngine_UserHealthFactorNotImproved.selector);
+        mockDsce.liquidate(ALICE, wEth, debtToCover);
+        vm.stopPrank();
+    }
 
     ////////////////////////////////////////
     ///         HEALTH FACTOR TEST       ///
