@@ -291,6 +291,30 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
     }
 
+    function testRevertIfLiquidatorHealthFactorGetsBroken() public {
+        MockDSC mdsc = new MockDSC(ethPriceFeed);
+
+        tokens = [wEth];
+        priceFeeds = [ethPriceFeed];
+
+        address owner = msg.sender;
+
+        vm.prank(owner);
+        DSCEngine mockDsce = new DSCEngine(tokens, priceFeeds, address(mdsc));
+        mdsc.transferOwnership(address(mockDsce));
+
+        // User Setup
+        vm.startPrank(ALICE);
+        ERC20Mock(wEth).approve(address(mockDsce), COLLATERAL_AMOUNT);
+        mockDsce.depositCollateralAndMintDsc(wEth, COLLATERAL_AMOUNT, 100 ether);
+        vm.stopPrank();
+
+        // Arrange Liquidator
+        uint256 collateraToCover = 1 ether; // 1 Ether = $2000
+        address LIQUIDATOR = makeAddr("Liquidator");
+        ERC20Mock(wEth).mint(LIQUIDATOR, collateraToCover);
+    }
+
     ////////////////////////////////////////
     ///         HEALTH FACTOR TEST       ///
     ////////////////////////////////////////
