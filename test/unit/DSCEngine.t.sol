@@ -35,6 +35,7 @@ contract DSCEngineTest is Test {
     address public btcPriceFeed;
 
     address public ALICE = makeAddr("Alice");
+    address public LIQUIDATOR = makeAddr("Liquidator");
     address public fakeToken = makeAddr("FakeToken");
 
     uint256 public ONE_ETH_PRICE = 2000;
@@ -271,15 +272,15 @@ contract DSCEngineTest is Test {
         vm.stopPrank();
 
         // Arrange Liquidator
-        uint256 collateraToCover = 1 ether; // 1 Ether = $2000
+        uint256 collateralToCover = 1 ether; // 1 Ether = $2000
         address LIQUIDATOR = makeAddr("Liquidator");
-        ERC20Mock(wEth).mint(LIQUIDATOR, collateraToCover);
+        ERC20Mock(wEth).mint(LIQUIDATOR, collateralToCover);
 
         vm.startPrank(LIQUIDATOR);
-        ERC20Mock(wEth).approve(address(mockDsce), collateraToCover);
+        ERC20Mock(wEth).approve(address(mockDsce), collateralToCover);
         uint256 debtToCover = 10 ether; // 10 DSC Tokens  = $10
         // Deposit 1 ether = $2000 and mint 100 Dsc = 100$
-        mockDsce.depositCollateralAndMintDsc(wEth, collateraToCover, 100 ether);
+        mockDsce.depositCollateralAndMintDsc(wEth, collateralToCover, 100 ether);
         mdsc.approve(address(mockDsce), debtToCover);
 
         // Act
@@ -289,6 +290,43 @@ contract DSCEngineTest is Test {
         vm.expectRevert(DSCEngine_UserHealthFactorNotImproved.selector);
         mockDsce.liquidate(ALICE, wEth, debtToCover);
         vm.stopPrank();
+    }
+
+    modifier liquidate() {
+        vm.startPrank(ALICE);
+        ERC20Mock(wEth).approve(address(dscEngine), 10 ether);
+        // Mint $10,000 worth of DSC
+        dscEngine.depositCollateralAndMintDsc(wEth, 10 ether, 100 ether);
+        vm.stopPrank();
+
+        uint256 collateralToCover = 20 ether;
+
+        // Update wETH Price
+        int256 updateEthPrice = 18e8; // $18
+        MockV3Aggregator(ethPriceFeed).updateAnswer(updateEthPrice);
+
+        // Get User Health Factor
+        uint256 userHealthFactor = dscEngine.getHealthFactor(ALICE);
+
+        ERC20Mock(wEth).mint(LIQUIDATOR, collateralToCover); // 10 Eth => $20,000
+
+        vm.startPrank(LIQUIDATOR);
+        ERC20Mock(wEth).approve(address(dscEngine), collateralToCover);
+
+        dscEngine.depositCollateralAndMintDsc(wEth, collateralToCover, 100 ether);
+        dsc.approve(address(dscEngine), 100 ether);
+
+        dscEngine.liquidate(ALICE, wEth, 100 ether);
+        vm.stopPrank();
+        _;
+    }
+
+    function testLiquidationPayoutIsCorrect() public liquidate {
+        uint256 liquidatorWethBalance = ERC20Mock(wEth).balanceOf(LIQUIDATOR);
+        uint256 expectedWeth = dscEngine.getTokenAmountFromUSD(wEth, 100 ether)
+            + (dscEngine.getTokenAmountFromUSD(wEth, 100 ether) / dscEngine.LIQUIDATOR_BONUS());
+
+        assertEq(liquidatorWethBalance, expectedWeth);
     }
 
     function testRevertIfLiquidatorHealthFactorGetsBroken() public {
