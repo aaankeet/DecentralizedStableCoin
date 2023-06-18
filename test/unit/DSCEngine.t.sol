@@ -2,6 +2,7 @@
 pragma solidity 0.8.19;
 
 import {Test} from "forge-std/Test.sol";
+import {StdCheats} from "forge-std/StdCheats.sol";
 import {console} from "forge-std/console.sol";
 import {DeployDsc} from "../../script/DeployDsc.s.sol";
 import {DSCEngine} from "../../src/DSCEngine.sol";
@@ -22,7 +23,7 @@ error DSCEngine_CriticalHealthFactor(uint256 healthFactor);
 error DSCEngine_HealthFactorOk();
 error DSCEngine_UserHealthFactorNotImproved();
 
-contract DSCEngineTest is Test {
+contract DSCEngineTest is StdCheats, Test {
     DeployDsc deployer;
     DecentralizedStableCoin dsc;
     DSCEngine dscEngine;
@@ -294,38 +295,45 @@ contract DSCEngineTest is Test {
 
     modifier liquidate() {
         vm.startPrank(ALICE);
-        ERC20Mock(wEth).approve(address(dscEngine), 10 ether);
-        // Mint $10,000 worth of DSC
-        dscEngine.depositCollateralAndMintDsc(wEth, 10 ether, 100 ether);
+        ERC20Mock(wEth).approve(address(dscEngine), COLLATERAL_AMOUNT);
+        // Mint $100 worth of DSC
+        dscEngine.depositCollateralAndMintDsc(wEth, COLLATERAL_AMOUNT, 100 ether);
         vm.stopPrank();
 
         uint256 collateralToCover = 20 ether;
 
         // Update wETH Price
-        int256 updateEthPrice = 18e8; // $18
+        int256 updateEthPrice = 18e8; // 1 Eth = $18
         MockV3Aggregator(ethPriceFeed).updateAnswer(updateEthPrice);
 
         // Get User Health Factor
         uint256 userHealthFactor = dscEngine.getHealthFactor(ALICE);
 
-        ERC20Mock(wEth).mint(LIQUIDATOR, collateralToCover); // 10 Eth => $20,000
+        ERC20Mock(wEth).mint(LIQUIDATOR, collateralToCover);
 
         vm.startPrank(LIQUIDATOR);
-        ERC20Mock(wEth).approve(address(dscEngine), collateralToCover);
 
+        ERC20Mock(wEth).approve(address(dscEngine), collateralToCover);
         dscEngine.depositCollateralAndMintDsc(wEth, collateralToCover, 100 ether);
         dsc.approve(address(dscEngine), 100 ether);
 
         dscEngine.liquidate(ALICE, wEth, 100 ether);
+
         vm.stopPrank();
         _;
     }
 
     function testLiquidationPayoutIsCorrect() public liquidate {
         uint256 liquidatorWethBalance = ERC20Mock(wEth).balanceOf(LIQUIDATOR);
+        console.log("liquidatorWethBalance", liquidatorWethBalance);
         uint256 expectedWeth = dscEngine.getTokenAmountFromUSD(wEth, 100 ether)
             + (dscEngine.getTokenAmountFromUSD(wEth, 100 ether) / dscEngine.LIQUIDATOR_BONUS());
 
+        console.log("Expected ETH", expectedWeth);
+
+        uint256 hardCodedExpected = 6111111111111111110;
+
+        assertEq(liquidatorWethBalance, hardCodedExpected);
         assertEq(liquidatorWethBalance, expectedWeth);
     }
 
