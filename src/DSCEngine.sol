@@ -151,7 +151,7 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
         // 0.05 Eth * 0.1 = 0.005.Getting 0.055
 
         // Calculate the bonus for liquidator for liquidating a user (10% bonus).
-        uint256 bonusCollateral = (amountOfDebtCovered * LIQUIDATION_PRECISION) / LIQUIDATOR_BONUS;
+        uint256 bonusCollateral = (amountOfDebtCovered * LIQUIDATOR_BONUS) / LIQUIDATION_PRECISION;
 
         // Calculate the total amount of collateral the liquidator will receive (debtToCover + Bonus).
         uint256 totalCollateralToRedeem = amountOfDebtCovered + bonusCollateral;
@@ -162,13 +162,13 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
         // Now Burn total Debt covered by the Liquidator
         _burnDsc(msg.sender, user, debtToCover);
 
-        // Get Target's Health Factor (Must Be Improved Since Liquidator Covered their Debt).
+        // Get Target's Health Factor (Must Be Improved Since Liquidator Burned their DSC).
         uint256 userEndingHealthFactor = _healthFactor(user);
 
-        // Revert if User's Health Factor is Not Improved
+        // Revert if Target's Health Factor is Not Improved
         if (userEndingHealthFactor <= userStartingHealthFactor) revert DSCEngine_UserHealthFactorNotImproved();
 
-        // Also Revert If Liquidator's Health Factor Drops In the Proccess
+        // Also Revert If Liquidator's Health Factor Drops In the Proccess.
         _revertIfHealthFactorIsBroken(msg.sender);
 
         return success;
@@ -277,7 +277,7 @@ contract DSCEngine is IDSCEngine, ReentrancyGuard {
         // Most USD pairs have 8 decimals, so we will just pretend they all do
         AggregatorV3Interface priceFeed = AggregatorV3Interface(tokenToPriceFeeds[token]);
         (, int256 price,,,) = priceFeed.staleCheckLatestRoundData();
-        return (usdAmountInWei * PRECISION) / (uint256(price) * FEED_PRECISION);
+        return ((usdAmountInWei * PRECISION) / (uint256(price) * FEED_PRECISION));
     }
 
     function getValueInUSD(address token, uint256 amount) public view returns (uint256) {
