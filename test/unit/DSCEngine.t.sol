@@ -120,7 +120,7 @@ contract DSCEngineTest is StdCheats, Test {
     }
 
     /////////////////////////////////////////////////////
-    ///            DEPOSIT COLLATERAL TESTS           ///
+    ///                COLLATERAL TESTS               ///
     /////////////////////////////////////////////////////
 
     function testRevertDepositCollateralIfTokenNotAllowed() public {
@@ -228,13 +228,6 @@ contract DSCEngineTest is StdCheats, Test {
         assertEq(dscEngine.getUserDscMinted(ALICE), 0);
     }
 
-    function testGetUserCollateralValue() public depositCollateral {
-        uint256 totalCollateralValue = dscEngine.getUserCollateralValue(ALICE);
-
-        uint256 expectedTotalCollateralValue = COLLATERAL_AMOUNT * ONE_ETH_PRICE;
-        assertEq(totalCollateralValue, expectedTotalCollateralValue);
-    }
-
     ////////////////////////////////////////////////////////////////////
     ///                        LIQUIDATE TESTS                       ///
     ////////////////////////////////////////////////////////////////////
@@ -274,7 +267,7 @@ contract DSCEngineTest is StdCheats, Test {
 
         // Arrange Liquidator
         uint256 collateralToCover = 1 ether; // 1 Ether = $2000
-        address LIQUIDATOR = makeAddr("Liquidator");
+
         ERC20Mock(wEth).mint(LIQUIDATOR, collateralToCover);
 
         vm.startPrank(LIQUIDATOR);
@@ -337,29 +330,7 @@ contract DSCEngineTest is StdCheats, Test {
         assertEq(liquidatorWethBalance, expectedWeth);
     }
 
-    function testRevertIfLiquidatorHealthFactorGetsBroken() public {
-        MockDSC mdsc = new MockDSC(ethPriceFeed);
-
-        tokens = [wEth];
-        priceFeeds = [ethPriceFeed];
-
-        address owner = msg.sender;
-
-        vm.prank(owner);
-        DSCEngine mockDsce = new DSCEngine(tokens, priceFeeds, address(mdsc));
-        mdsc.transferOwnership(address(mockDsce));
-
-        // User Setup
-        vm.startPrank(ALICE);
-        ERC20Mock(wEth).approve(address(mockDsce), COLLATERAL_AMOUNT);
-        mockDsce.depositCollateralAndMintDsc(wEth, COLLATERAL_AMOUNT, 100 ether);
-        vm.stopPrank();
-
-        // Arrange Liquidator
-        uint256 collateraToCover = 1 ether; // 1 Ether = $2000
-        address LIQUIDATOR = makeAddr("Liquidator");
-        ERC20Mock(wEth).mint(LIQUIDATOR, collateraToCover);
-    }
+    function testRevertIfLiquidatorHealthFactorGetsBroken() public {}
 
     ////////////////////////////////////////
     ///         HEALTH FACTOR TEST       ///
@@ -389,5 +360,12 @@ contract DSCEngineTest is StdCheats, Test {
          * would result in liquidation.
          */
         assertEq(dscEngine.getHealthFactor(ALICE), expectedHealthFactor);
+    }
+
+    function testGetUserCollateralValue() public depositCollateral {
+        uint256 totalCollateralValue = dscEngine.getUserCollateralValue(ALICE);
+
+        uint256 expectedTotalCollateralValue = COLLATERAL_AMOUNT * ONE_ETH_PRICE;
+        assertEq(totalCollateralValue, expectedTotalCollateralValue);
     }
 }
