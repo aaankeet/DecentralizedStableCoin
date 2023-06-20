@@ -332,8 +332,8 @@ contract DSCEngineTest is StdCheats, Test {
 
     function testUserStillHasSomeEthAfterLiquidation() public liquidate {
         // Get how much WETH the user lost
-        uint256 amountLiquidated = dscEngine.getTokenAmountFromUSD(wEth, DSC_AMOUNT_TO_MINT)
-            + (dscEngine.getTokenAmountFromUSD(wEth, DSC_AMOUNT_TO_MINT) / dscEngine.LIQUIDATOR_BONUS());
+        uint256 amountLiquidated = dscEngine.getTokenAmountFromUSD(wEth, 100 ether)
+            + (dscEngine.getTokenAmountFromUSD(wEth, 100 ether) / dscEngine.LIQUIDATOR_BONUS());
 
         uint256 usdAmountLiquidated = dscEngine.getValueInUSD(wEth, amountLiquidated);
         uint256 expectedUserCollateralValueInUsd =
