@@ -330,6 +330,21 @@ contract DSCEngineTest is StdCheats, Test {
         assertEq(liquidatorWethBalance, expectedWeth);
     }
 
+    function testUserStillHasSomeEthAfterLiquidation() public liquidate {
+        // Get how much WETH the user lost
+        uint256 amountLiquidated = dscEngine.getTokenAmountFromUSD(wEth, DSC_AMOUNT_TO_MINT)
+            + (dscEngine.getTokenAmountFromUSD(wEth, DSC_AMOUNT_TO_MINT) / dscEngine.LIQUIDATOR_BONUS());
+
+        uint256 usdAmountLiquidated = dscEngine.getValueInUSD(wEth, amountLiquidated);
+        uint256 expectedUserCollateralValueInUsd =
+            dscEngine.getValueInUSD(wEth, COLLATERAL_AMOUNT) - (usdAmountLiquidated);
+
+        (, uint256 userCollateralValueInUsd) = dscEngine.getUseraAccountInfo(ALICE);
+        uint256 hardCodedExpectedValue = 70000000000000000020;
+        assertEq(userCollateralValueInUsd, expectedUserCollateralValueInUsd);
+        assertEq(userCollateralValueInUsd, hardCodedExpectedValue);
+    }
+
     function testRevertIfLiquidatorHealthFactorGetsBroken() public {}
 
     ////////////////////////////////////////
