@@ -345,6 +345,16 @@ contract DSCEngineTest is StdCheats, Test {
         assertEq(userCollateralValueInUsd, hardCodedExpectedValue);
     }
 
+    function testLiquidatorTakesOnUsersDebt() public liquidate {
+        (uint256 liquidatorDscMinted,) = dscEngine.getUseraAccountInfo(LIQUIDATOR);
+        assertEq(liquidatorDscMinted, 100 ether);
+    }
+
+    function testUserHasNoMoreDebt() public liquidate {
+        (uint256 userDscMinted,) = dscEngine.getUseraAccountInfo(ALICE);
+        assertEq(userDscMinted, 0);
+    }
+
     function testRevertIfLiquidatorHealthFactorGetsBroken() public {}
 
     ////////////////////////////////////////
